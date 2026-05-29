@@ -1,0 +1,97 @@
+# ── Python / Backend ──────────────────────────────────────────────────────────
+
+# Virtual environments
+backend/.venv/
+.venv/
+
+# Environment variables (never commit secrets)
+backend/.env
+frontend/.env.local
+.env
+.env.local
+.env.*.local
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# pytest
+.pytest_cache/
+backend/.pytest_cache/
+.coverage
+htmlcov/
+
+# Alembic compiled
+*.pyc
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# ── Node / Frontend ───────────────────────────────────────────────────────────
+
+# Dependencies
+frontend/node_modules/
+node_modules/
+
+# Next.js build output
+frontend/.next/
+.next/
+
+# Next.js static export
+out/
+
+# Build cache
+frontend/.turbo/
+.turbo/
+
+# TypeScript build info
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+
+# ── Editors & OS ──────────────────────────────────────────────────────────────
+
+# VS Code
+.vscode/
+
+# JetBrains IDEs
+.idea/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+
+# Local override compose files (keep docker-compose.yml itself)
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ── Claude Code ───────────────────────────────────────────────────────────────
+
+# Project-specific Claude memory (stored in user profile, not the repo)
+# The CLAUDE.md project instructions file IS committed intentionally.
+.claude/
+
+# ── Misc ──────────────────────────────────────────────────────────────────────
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
