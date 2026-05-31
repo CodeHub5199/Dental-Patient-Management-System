@@ -6,12 +6,8 @@ import { cn } from "@/lib/utils";
 import type { AppointmentWithPatient } from "@/types";
 import { StatusBadge } from "./StatusBadge";
 
-const WORK_START_MIN = 9 * 60;    // 09:00 in minutes from midnight
-const WORK_END_MIN   = 17 * 60;   // 17:00
-const WORK_RANGE_MIN = WORK_END_MIN - WORK_START_MIN;   // 480 min
-const PX_PER_MIN     = 1.5;
-const TOTAL_HEIGHT   = WORK_RANGE_MIN * PX_PER_MIN;     // 720 px
-const GRID_INTERVAL  = 30;                               // grid lines every 30 min
+const PX_PER_MIN    = 1.5;
+const GRID_INTERVAL = 30;  // grid lines every 30 min
 
 function timeToMinutes(t: string): number {
   const [h, m] = t.split(":").map(Number);
@@ -29,37 +25,47 @@ function minutesToLabel(min: number): string {
 interface Props {
   appointments: AppointmentWithPatient[];
   onSlotClick?: (startTime: string) => void;
+  workStartMin?: number;
+  workEndMin?: number;
 }
 
-export function DayViewCalendar({ appointments, onSlotClick }: Props) {
+export function DayViewCalendar({
+  appointments,
+  onSlotClick,
+  workStartMin = 9 * 60,
+  workEndMin = 17 * 60,
+}: Props) {
   const router = useRouter();
+
+  const workRangeMin = workEndMin - workStartMin;
+  const totalHeight  = workRangeMin * PX_PER_MIN;
 
   const gridSlots = useMemo(() => {
     const slots: number[] = [];
-    for (let m = WORK_START_MIN; m <= WORK_END_MIN; m += GRID_INTERVAL) {
+    for (let m = workStartMin; m <= workEndMin; m += GRID_INTERVAL) {
       slots.push(m);
     }
     return slots;
-  }, []);
+  }, [workStartMin, workEndMin]);
 
   const positioned = useMemo(() =>
     appointments.map((appt) => {
       const startMin = timeToMinutes(appt.start_time);
       const endMin   = timeToMinutes(appt.end_time);
-      const clampedStart = Math.max(startMin, WORK_START_MIN);
-      const clampedEnd   = Math.min(endMin,   WORK_END_MIN);
-      const top    = (clampedStart - WORK_START_MIN) * PX_PER_MIN;
+      const clampedStart = Math.max(startMin, workStartMin);
+      const clampedEnd   = Math.min(endMin,   workEndMin);
+      const top    = (clampedStart - workStartMin) * PX_PER_MIN;
       const height = Math.max((clampedEnd - clampedStart) * PX_PER_MIN, 20);
       return { appt, top, height };
     }),
-  [appointments]);
+  [appointments, workStartMin, workEndMin]);
 
   const handleGridClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("[data-appointment]")) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const clickY = e.clientY - rect.top;
     const minutesOffset = Math.floor(clickY / PX_PER_MIN / GRID_INTERVAL) * GRID_INTERVAL;
-    const totalMin = WORK_START_MIN + Math.max(0, Math.min(minutesOffset, WORK_RANGE_MIN - GRID_INTERVAL));
+    const totalMin = workStartMin + Math.max(0, Math.min(minutesOffset, workRangeMin - GRID_INTERVAL));
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
     onSlotClick?.(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
@@ -68,12 +74,12 @@ export function DayViewCalendar({ appointments, onSlotClick }: Props) {
   return (
     <div className="flex border rounded-lg overflow-hidden bg-white select-none">
       {/* Time axis */}
-      <div className="w-16 shrink-0 border-r bg-muted/20 relative" style={{ height: TOTAL_HEIGHT }}>
+      <div className="w-16 shrink-0 border-r bg-muted/20 relative" style={{ height: totalHeight }}>
         {gridSlots.map((min) => (
           <span
             key={min}
             className="absolute right-2 text-[10px] text-muted-foreground -translate-y-1/2"
-            style={{ top: (min - WORK_START_MIN) * PX_PER_MIN }}
+            style={{ top: (min - workStartMin) * PX_PER_MIN }}
           >
             {minutesToLabel(min)}
           </span>
@@ -83,7 +89,7 @@ export function DayViewCalendar({ appointments, onSlotClick }: Props) {
       {/* Grid + appointments */}
       <div
         className="flex-1 relative cursor-pointer"
-        style={{ height: TOTAL_HEIGHT }}
+        style={{ height: totalHeight }}
         onClick={handleGridClick}
       >
         {/* Grid lines */}
@@ -94,7 +100,7 @@ export function DayViewCalendar({ appointments, onSlotClick }: Props) {
               "absolute left-0 right-0 border-t",
               i % 2 === 0 ? "border-border/60" : "border-border/25 border-dashed",
             )}
-            style={{ top: (min - WORK_START_MIN) * PX_PER_MIN }}
+            style={{ top: (min - workStartMin) * PX_PER_MIN }}
           />
         ))}
 

@@ -12,9 +12,30 @@ import { DayViewCalendar } from "@/components/scheduling/DayViewCalendar";
 import { WeekViewCalendar } from "@/components/scheduling/WeekViewCalendar";
 import { DailySummaryBar } from "@/components/scheduling/DailySummaryBar";
 import { NewAppointmentDialog } from "@/components/scheduling/NewAppointmentDialog";
-import type { AppointmentWithPatient, User } from "@/types";
+import type { AppointmentWithPatient, ClinicSettings, User } from "@/types";
 
 export const dynamic = "force-dynamic";
+
+// ── Working-hours helpers ─────────────────────────────────────────────────────
+
+const DAY_NAMES = [
+  "sunday", "monday", "tuesday", "wednesday",
+  "thursday", "friday", "saturday",
+] as const;
+
+function getWorkHoursForDate(
+  settings: ClinicSettings | null,
+  date: Date,
+): { workStartMin: number; workEndMin: number } {
+  const dayName = DAY_NAMES[date.getDay()];
+  const hours = settings?.working_hours
+    ? (settings.working_hours as Record<string, { start: string; end: string } | null>)[dayName]
+    : null;
+  if (!hours) return { workStartMin: 9 * 60, workEndMin: 17 * 60 };
+  const [sh, sm] = hours.start.split(":").map(Number);
+  const [eh, em] = hours.end.split(":").map(Number);
+  return { workStartMin: sh * 60 + sm, workEndMin: eh * 60 + em };
+}
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -54,21 +75,25 @@ export default function AppointmentsPage() {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [weekStart, setWeekStart]     = useState<Date>(() => getMonday(new Date()));
 
-  const [appointments,  setAppointments]  = useState<AppointmentWithPatient[]>([]);
-  const [statusCounts,  setStatusCounts]  = useState<Record<string, number>>({});
-  const [loading,       setLoading]       = useState(true);
-  const [dentist,       setDentist]       = useState<User | null>(null);
-  const [dialogOpen,    setDialogOpen]    = useState(false);
-  const [initialTime,   setInitialTime]   = useState<string | undefined>();
+  const [appointments,   setAppointments]   = useState<AppointmentWithPatient[]>([]);
+  const [statusCounts,   setStatusCounts]   = useState<Record<string, number>>({});
+  const [loading,        setLoading]        = useState(true);
+  const [dentist,        setDentist]        = useState<User | null>(null);
+  const [clinicSettings, setClinicSettings] = useState<ClinicSettings | null>(null);
+  const [dialogOpen,     setDialogOpen]     = useState(false);
+  const [initialTime,    setInitialTime]    = useState<string | undefined>();
 
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval>>();
 
   // ── Fetch dentist on mount ────────────────────────────────────────────────
 
   useEffect(() => {
-    apiClient.get<User[]>("/users/dentists").then((res) => {
-      if (res.data.length > 0) setDentist(res.data[0]);
-    }).catch(() => { /* dentist list unavailable */ });
+    apiClient.get<User[]>("/users/dentists")
+      .then((res) => { if (res.data.length > 0) setDentist(res.data[0]); })
+      .catch(() => {});
+    apiClient.get<ClinicSettings>("/settings/clinic")
+      .then((res) => setClinicSettings(res.data))
+      .catch(() => {});
   }, []);
 
   // ── Fetch appointments ────────────────────────────────────────────────────
@@ -151,6 +176,9 @@ export default function AppointmentsPage() {
 
   const isToday = dateKey(currentDate) === dateKey(new Date());
 
+  const { workStartMin, workEndMin } = getWorkHoursForDate(clinicSettings, currentDate);
+  const calendarHeight = (workEndMin - workStartMin) * 1.5;
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -227,11 +255,13 @@ export default function AppointmentsPage() {
 
       {/* Calendar */}
       {loading ? (
-        <Skeleton className="h-[720px] rounded-lg" />
+        <Skeleton className="rounded-lg" style={{ height: calendarHeight }} />
       ) : view === "day" ? (
         <DayViewCalendar
           appointments={appointments}
           onSlotClick={handleSlotClick}
+          workStartMin={workStartMin}
+          workEndMin={workEndMin}
         />
       ) : (
         <WeekViewCalendar

@@ -209,6 +209,43 @@ export interface DashboardSummary {
   revenue_today: number;
 }
 
+// ─── Settings ─────────────────────────────────────────────────────────────────
+export interface WorkingDayHours {
+  start: string;
+  end: string;
+}
+
+export interface WorkingHours {
+  monday:    WorkingDayHours | null;
+  tuesday:   WorkingDayHours | null;
+  wednesday: WorkingDayHours | null;
+  thursday:  WorkingDayHours | null;
+  friday:    WorkingDayHours | null;
+  saturday:  WorkingDayHours | null;
+  sunday:    WorkingDayHours | null;
+}
+
+export interface ClinicSettings {
+  id?: string;
+  clinic_name: string;
+  timezone: string;
+  working_hours: Partial<WorkingHours>;
+  slot_duration_minutes: number;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+}
+
+export interface Procedure {
+  id: string;
+  code: string | null;
+  name: string;
+  default_amount: number | null;
+  default_duration_minutes: number | null;
+  category: string | null;
+  is_active: boolean;
+}
+
 // ─── Pagination ───────────────────────────────────────────────────────────────
 export interface Pagination {
   page: number;
