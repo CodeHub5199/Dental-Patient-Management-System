@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -13,6 +14,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { apiClient } from "@/lib/api";
 
 const baseNavItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -38,6 +40,13 @@ export function SideNav() {
 
   const isDentist = user?.role === "dentist";
   const navItems = isDentist ? [...baseNavItems, ...dentistNavItems] : baseNavItems;
+
+  const [clinicName, setClinicName] = useState("Dental Suite");
+  useEffect(() => {
+    apiClient.get<{ clinic_name: string }>("/settings/clinic")
+      .then((res) => { if (res.data.clinic_name) setClinicName(res.data.clinic_name); })
+      .catch(() => { /* keep fallback */ });
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -84,8 +93,12 @@ export function SideNav() {
           <p className="text-white font-bold text-sm leading-tight tracking-wide">
             DPMS
           </p>
-          <p className="text-xs leading-tight" style={{ color: "rgba(255,255,255,0.35)" }}>
-            Dental Suite
+          <p
+            className="text-xs leading-tight truncate max-w-[130px]"
+            style={{ color: "rgba(255,255,255,0.35)" }}
+            title={clinicName}
+          >
+            {clinicName}
           </p>
         </div>
       </div>
