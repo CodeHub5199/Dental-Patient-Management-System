@@ -30,6 +30,7 @@ export default function PatientsPage() {
   const [sortBy, setSortBy] = useState<SortField>("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [showInactive, setShowInactive] = useState(false);
+  const [outstandingOnly, setOutstandingOnly] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingPatient, setBookingPatient] = useState<Patient | null>(null);
@@ -38,22 +39,22 @@ export default function PatientsPage() {
   const fetchPatients = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get("/patients", {
-        params: {
-          page,
-          per_page: 20,
-          is_active: !showInactive,
-          sort_by: sortBy,
-          sort_order: sortOrder,
-        },
-      });
+      const params: Record<string, unknown> = {
+        page,
+        per_page: 20,
+        is_active: !showInactive,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      };
+      if (outstandingOnly) params.has_outstanding_balance = true;
+      const res = await apiClient.get("/patients", { params });
       setData(res.data);
     } catch {
       toast.error("Failed to load patients");
     } finally {
       setLoading(false);
     }
-  }, [page, sortBy, sortOrder, showInactive]);
+  }, [page, sortBy, sortOrder, showInactive, outstandingOnly]);
 
   useEffect(() => {
     fetchPatients();
@@ -108,20 +109,34 @@ export default function PatientsPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <SearchBar />
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => {
-              setShowInactive(e.target.checked);
-              setPage(1);
-            }}
-            className="rounded border-input"
-          />
-          Show inactive patients
-        </label>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={outstandingOnly}
+              onChange={(e) => {
+                setOutstandingOnly(e.target.checked);
+                setPage(1);
+              }}
+              className="rounded border-input"
+            />
+            Outstanding balance only
+          </label>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showInactive}
+              onChange={(e) => {
+                setShowInactive(e.target.checked);
+                setPage(1);
+              }}
+              className="rounded border-input"
+            />
+            Show inactive patients
+          </label>
+        </div>
       </div>
 
       {/* Table */}

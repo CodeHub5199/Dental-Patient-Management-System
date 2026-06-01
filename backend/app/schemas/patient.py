@@ -61,6 +61,8 @@ class PatientStats(BaseModel):
     total_appointments: int
     total_treatments: int
     total_amount: Decimal
+    total_paid: Decimal
+    outstanding_balance: Decimal
     last_visit_date: Optional[date]
     upcoming_appointment: Optional[UpcomingAppointment]
 

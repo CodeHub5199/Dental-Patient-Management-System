@@ -49,6 +49,7 @@ from app.api.v1 import (
     dashboard,
     documents,
     patients,
+    payments,
     settings as settings_router,
     treatments,
     users,
@@ -62,6 +63,7 @@ app.include_router(patients.router, prefix=API_PREFIX)
 app.include_router(appointments.router, prefix=API_PREFIX)
 app.include_router(clinical_notes.router, prefix=API_PREFIX)
 app.include_router(treatments.router, prefix=API_PREFIX)
+app.include_router(payments.router, prefix=API_PREFIX)
 app.include_router(documents.router, prefix=API_PREFIX)
 app.include_router(communications.router, prefix=API_PREFIX)
 app.include_router(dashboard.router, prefix=API_PREFIX)

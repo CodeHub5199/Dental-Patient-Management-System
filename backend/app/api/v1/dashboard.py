@@ -45,13 +45,26 @@ async def get_dashboard_summary(
                 SELECT COALESCE(SUM(amount), 0) AS total_amount_today
                 FROM treatments
                 WHERE performed_date = :today AND status = 'completed'
+            ),
+            collected AS (
+                SELECT COALESCE(SUM(amount), 0) AS collected_today
+                FROM payments
+                WHERE payment_date = :today
+            ),
+            outstanding AS (
+                SELECT GREATEST(
+                    COALESCE((SELECT SUM(amount) FROM treatments WHERE status = 'completed'), 0) -
+                    COALESCE((SELECT SUM(amount) FROM payments), 0),
+                0) AS total_outstanding
             )
             SELECT
                 ac.*,
                 ps.total_active,
                 ps.new_this_month,
-                rv.total_amount_today
-            FROM appointment_counts ac, patient_stats ps, revenue rv
+                rv.total_amount_today,
+                co.collected_today,
+                os.total_outstanding
+            FROM appointment_counts ac, patient_stats ps, revenue rv, collected co, outstanding os
         """),
         {"today": today},
     )
@@ -72,4 +85,6 @@ async def get_dashboard_summary(
         total_active_patients=row.total_active,
         new_patients_this_month=row.new_this_month,
         revenue_today=row.total_amount_today,
+        collected_today=row.collected_today,
+        total_outstanding=row.total_outstanding,
     )

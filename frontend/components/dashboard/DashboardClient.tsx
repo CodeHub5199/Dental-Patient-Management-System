@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api";
 import { formatCurrency, formatTime } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarDays, Users, CheckCircle2, DollarSign, RefreshCw, AlertCircle } from "lucide-react";
+import { CalendarDays, Users, CheckCircle2, DollarSign, RefreshCw, AlertCircle, CreditCard, TrendingDown } from "lucide-react";
 import type { DashboardSummary, AppointmentWithPatient, AppointmentStatus } from "@/types";
 
 // ── Status config ──────────────────────────────────────────────────────────────
@@ -299,8 +299,8 @@ export function DashboardClient() {
         </button>
       </div>
 
-      {/* ── 4-column KPI cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── 5-column KPI cards ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <KpiCard
           icon={<CalendarDays size={20} className="text-blue-600" />}
           iconBg="#EFF6FF"
@@ -342,9 +342,33 @@ export function DashboardClient() {
         <KpiCard
           icon={<DollarSign size={20} className="text-amber-600" />}
           iconBg="#FFFBEB"
-          label="Revenue Today"
+          label="Billed Today"
           value={summary ? formatCurrency(summary.revenue_today) : formatCurrency(0)}
           badge={{ text: "Treatment fees", color: "#b45309" }}
+          loading={loading}
+          error={summaryError}
+        />
+        <KpiCard
+          icon={<CreditCard size={20} className="text-emerald-600" />}
+          iconBg="#ECFDF5"
+          label="Collected Today"
+          value={summary ? formatCurrency(summary.collected_today) : formatCurrency(0)}
+          badge={
+            summary
+              ? {
+                  text: summary.collected_today >= summary.revenue_today
+                    ? "Fully settled"
+                    : summary.collected_today > 0
+                    ? "Partial"
+                    : "None collected",
+                  color: summary.collected_today >= summary.revenue_today
+                    ? "#059669"
+                    : summary.collected_today > 0
+                    ? "#d97706"
+                    : "#6b7280",
+                }
+              : undefined
+          }
           loading={loading}
           error={summaryError}
         />
@@ -549,6 +573,41 @@ export function DashboardClient() {
               </div>
             </div>
           )}
+
+          {/* Outstanding balance card */}
+          {!loading && !summaryError && summary && (
+            <div
+              className="rounded-2xl border shadow-sm p-5"
+              style={{
+                backgroundColor: summary.total_outstanding > 0 ? "#FFF7F7" : "#F0FDF4",
+                borderColor:     summary.total_outstanding > 0 ? "#FECACA" : "#BBF7D0",
+              }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingDown
+                  size={15}
+                  style={{ color: summary.total_outstanding > 0 ? "#dc2626" : "#16a34a" }}
+                />
+                <p className="text-xs font-semibold uppercase tracking-wide"
+                  style={{ color: summary.total_outstanding > 0 ? "#dc2626" : "#16a34a" }}
+                >
+                  Total Outstanding
+                </p>
+              </div>
+              <p
+                className="text-2xl font-bold tabular-nums"
+                style={{ color: summary.total_outstanding > 0 ? "#dc2626" : "#16a34a" }}
+              >
+                {formatCurrency(summary.total_outstanding)}
+              </p>
+              <p className="text-xs mt-1" style={{ color: summary.total_outstanding > 0 ? "#ef4444" : "#22c55e" }}>
+                {summary.total_outstanding > 0
+                  ? "Unpaid balances across all patients"
+                  : "All balances settled"}
+              </p>
+            </div>
+          )}
+          {loading && <Skeleton className="h-28 rounded-2xl" />}
           {loading && <Skeleton className="h-40 rounded-2xl" />}
         </div>
       </div>

@@ -39,3 +39,4 @@ class User(Base):
     documents = relationship("Document", back_populates="uploader")
     communications = relationship("Communication", back_populates="sender")
     password_reset_tokens = relationship("PasswordResetToken", back_populates="user")
+    payments = relationship("Payment", back_populates="recorder")

@@ -19,11 +19,14 @@ import {
   ChevronRight,
   Stethoscope,
   Upload,
+  CreditCard,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import type { Patient, ClinicalNote, Treatment, AppointmentWithPatient, Document, DocumentType } from "@/types";
+import type { Patient, ClinicalNote, Treatment, AppointmentWithPatient, Document, DocumentType, Payment } from "@/types";
 import { formatDate, formatTime, formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PatientFormDialog } from "@/components/patients/PatientFormDialog";
 import { DeactivatePatientDialog } from "@/components/patients/DeactivatePatientDialog";
+import { PaymentDialog } from "@/components/patients/PaymentDialog";
 import { DocumentTypeFilter } from "@/components/documents/DocumentTypeFilter";
 import { DocumentCard } from "@/components/documents/DocumentCard";
 import { UploadDialog } from "@/components/documents/UploadDialog";
@@ -329,6 +333,120 @@ function DocumentsTab({ patientId, isDentist }: { patientId: string; isDentist: 
   );
 }
 
+// ─── Tab: Payments ───────────────────────────────────────────────────────────
+
+const METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  bank_transfer: "Bank Transfer",
+  insurance: "Insurance",
+  other: "Other",
+};
+
+function PaymentsTab({
+  patientId,
+  isDentist,
+  onBalanceChange,
+}: {
+  patientId: string;
+  isDentist: boolean;
+  onBalanceChange: () => void;
+}) {
+  const [payments, setPayments] = useState<Payment[] | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const load = () => {
+    apiClient
+      .get<{ data: Payment[] }>(`/payments?patient_id=${patientId}&per_page=100`)
+      .then((res) => setPayments(res.data.data))
+      .catch(() => toast.error("Failed to load payments"));
+  };
+
+  useEffect(() => { load(); }, [patientId]);
+
+  const handleAdded = (p: Payment) => {
+    setPayments((prev) => (prev ? [p, ...prev] : [p]));
+    onBalanceChange();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this payment record? This cannot be undone.")) return;
+    try {
+      await apiClient.delete(`/payments/${id}`);
+      setPayments((prev) => (prev ? prev.filter((p) => p.id !== id) : null));
+      toast.success("Payment deleted");
+      onBalanceChange();
+    } catch {
+      toast.error("Failed to delete payment");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button size="sm" onClick={() => setDialogOpen(true)}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          Record Payment
+        </Button>
+      </div>
+
+      {payments === null ? (
+        <div className="py-8 space-y-3">
+          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-12 rounded" />)}
+        </div>
+      ) : payments.length === 0 ? (
+        <div className="py-10 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
+          <CreditCard className="h-8 w-8 text-muted-foreground/40" />
+          <p>No payments recorded for this patient.</p>
+        </div>
+      ) : (
+        <div className="divide-y">
+          {payments.map((p) => (
+            <div key={p.id} className="flex items-center justify-between py-3 gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-8 w-8 rounded-full bg-green-50 flex items-center justify-center shrink-0">
+                  <CreditCard className="h-4 w-4 text-green-600" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-green-700">
+                      +{formatCurrency(Number(p.amount))}
+                    </span>
+                    <span className="text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                      {METHOD_LABELS[p.payment_method] ?? p.payment_method}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{formatDate(p.payment_date)}</span>
+                  </div>
+                  {p.notes && <p className="text-xs text-muted-foreground truncate">{p.notes}</p>}
+                  {p.recorder && (
+                    <p className="text-xs text-muted-foreground">Recorded by {p.recorder.full_name}</p>
+                  )}
+                </div>
+              </div>
+              {isDentist && (
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  className="shrink-0 p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  title="Delete payment"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <PaymentDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        patientId={patientId}
+        onSuccess={handleAdded}
+      />
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PatientDetailPage() {
@@ -446,7 +564,7 @@ export default function PatientDetailPage() {
       )}
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Appointments</CardTitle>
@@ -468,8 +586,28 @@ export default function PatientDetailPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Billed</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
+            <p className="text-xl font-bold">
               {stats ? formatCurrency(stats.total_amount) : "—"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Paid</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xl font-bold text-green-700">
+              {stats ? formatCurrency(stats.total_paid) : "—"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className={stats && stats.outstanding_balance > 0 ? "border-red-200 bg-red-50/40" : ""}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Outstanding</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-xl font-bold ${stats && stats.outstanding_balance > 0 ? "text-red-600" : "text-green-700"}`}>
+              {stats ? formatCurrency(stats.outstanding_balance) : "—"}
             </p>
           </CardContent>
         </Card>
@@ -478,7 +616,7 @@ export default function PatientDetailPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Last Visit</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-base">
+            <p className="text-sm font-bold">
               {stats?.last_visit_date ? formatDate(stats.last_visit_date) : "No visits"}
             </p>
           </CardContent>
@@ -549,6 +687,7 @@ export default function PatientDetailPage() {
             { value: "treatments",      icon: Activity,     label: "Treatments"     },
             { value: "clinical-notes",  icon: FileText,     label: "Clinical Notes" },
             { value: "documents",       icon: Folder,       label: "Documents"      },
+            { value: "payments",        icon: CreditCard,   label: "Payments"       },
             { value: "communications",  icon: MessageSquare, label: "Communications" },
           ].map(({ value, icon: Icon, label }) => (
             <TabsTrigger
@@ -576,6 +715,14 @@ export default function PatientDetailPage() {
 
         <TabsContent value="documents" className="mt-4">
           <DocumentsTab patientId={patient.id} isDentist={isDentist} />
+        </TabsContent>
+
+        <TabsContent value="payments" className="mt-4">
+          <PaymentsTab
+            patientId={patient.id}
+            isDentist={isDentist}
+            onBalanceChange={fetchPatient}
+          />
         </TabsContent>
 
         <TabsContent value="communications" className="mt-4">

@@ -47,3 +47,4 @@ class Patient(Base):
     clinical_notes = relationship("ClinicalNote", back_populates="patient")
     documents = relationship("Document", back_populates="patient")
     communications = relationship("Communication", back_populates="patient")
+    payments = relationship("Payment", back_populates="patient", order_by="Payment.payment_date.desc()")

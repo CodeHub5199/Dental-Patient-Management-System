@@ -27,6 +27,8 @@ export interface PatientStats {
   total_appointments: number;
   total_treatments: number;
   total_amount: number;
+  total_paid: number;
+  outstanding_balance: number;
   last_visit_date: string | null;
   upcoming_appointment: {
     id: string;
@@ -34,6 +36,21 @@ export interface PatientStats {
     time: string;
     type: string;
   } | null;
+}
+
+// ─── Payments ─────────────────────────────────────────────────────────────────
+export type PaymentMethod = "cash" | "card" | "bank_transfer" | "insurance" | "other";
+
+export interface Payment {
+  id: string;
+  patient_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: PaymentMethod;
+  notes: string | null;
+  recorded_by: string;
+  recorder: { id: string; full_name: string } | null;
+  created_at: string;
 }
 
 export interface Patient {
@@ -207,6 +224,8 @@ export interface DashboardSummary {
   total_active_patients: number;
   new_patients_this_month: number;
   revenue_today: number;
+  collected_today: number;
+  total_outstanding: number;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────

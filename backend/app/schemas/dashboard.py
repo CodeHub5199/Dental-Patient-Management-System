@@ -21,3 +21,5 @@ class DashboardSummary(BaseModel):
     total_active_patients: int
     new_patients_this_month: int
     revenue_today: Decimal
+    collected_today: Decimal
+    total_outstanding: Decimal

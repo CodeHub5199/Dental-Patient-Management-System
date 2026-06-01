@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_role
 from app.models.patient import Patient
+from app.models.payment import Payment as PaymentModel
+from app.models.treatment import Treatment
 from app.schemas.auth import MessageResponse
 from app.schemas.patient import (
     PaginatedPatients,
@@ -52,6 +54,7 @@ async def list_patients(
     db: AsyncSession = Depends(get_db),
     search: str | None = Query(None),
     is_active: bool = Query(True),
+    has_outstanding_balance: bool | None = Query(None),
     registration_date_from: date | None = Query(None),
     registration_date_to: date | None = Query(None),
     sort_by: str = Query("created_at"),
@@ -74,6 +77,18 @@ async def list_patients(
         query = query.where(Patient.registration_date >= registration_date_from)
     if registration_date_to:
         query = query.where(Patient.registration_date <= registration_date_to)
+    if has_outstanding_balance is True:
+        billed_sq = (
+            select(func.coalesce(func.sum(Treatment.amount), 0))
+            .where(Treatment.patient_id == Patient.id, Treatment.status == "completed")
+            .scalar_subquery()
+        )
+        paid_sq = (
+            select(func.coalesce(func.sum(PaymentModel.amount), 0))
+            .where(PaymentModel.patient_id == Patient.id)
+            .scalar_subquery()
+        )
+        query = query.where(billed_sq > paid_sq)
 
     sort_col = getattr(Patient, sort_by, Patient.created_at)
     query = query.order_by(sort_col.desc() if sort_order == "desc" else sort_col.asc())
@@ -140,16 +155,21 @@ async def get_patient(
                 (SELECT COUNT(*) FROM appointments WHERE patient_id = :pid) AS total_appointments,
                 (SELECT COUNT(*) FROM treatments WHERE patient_id = :pid) AS total_treatments,
                 (SELECT COALESCE(SUM(amount), 0) FROM treatments WHERE patient_id = :pid AND status = 'completed') AS total_amount,
+                (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE patient_id = :pid) AS total_paid,
                 (SELECT MAX(appointment_date) FROM appointments WHERE patient_id = :pid AND status = 'completed') AS last_visit_date
         """),
         {"pid": str(patient_id)},
     )
     stats_row = stats_result.one()
 
+    total_amount = stats_row.total_amount or 0
+    total_paid = stats_row.total_paid or 0
     stats = PatientStats(
         total_appointments=stats_row.total_appointments,
         total_treatments=stats_row.total_treatments,
-        total_amount=stats_row.total_amount or 0,
+        total_amount=total_amount,
+        total_paid=total_paid,
+        outstanding_balance=total_amount - total_paid,
         last_visit_date=stats_row.last_visit_date,
         upcoming_appointment=None,
     )
