@@ -17,11 +17,11 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
-    # Supabase
-    supabase_url: str
-    supabase_anon_key: str
-    supabase_service_role_key: str
-    supabase_storage_bucket: str = "patient-docs"
+    # Cloudflare R2
+    r2_account_id: str
+    r2_access_key_id: str
+    r2_secret_access_key: str
+    r2_bucket_name: str = "patient-docs"
 
     # JWT
     secret_key: str

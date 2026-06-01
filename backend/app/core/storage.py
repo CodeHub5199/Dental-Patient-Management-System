@@ -4,15 +4,13 @@ import logging
 import threading
 from typing import Optional
 
+import boto3
+from botocore.config import Config
 from PIL import Image
-from supabase import create_client, Client
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
-
-_client: Optional[Client] = None
-_client_lock = threading.Lock()
 
 ALLOWED_MIME_TYPES = frozenset([
     "image/jpeg",
@@ -29,17 +27,24 @@ ALLOWED_DOCUMENT_TYPES = frozenset([
 
 IMAGE_MIME_TYPES = frozenset(["image/jpeg", "image/png"])
 
+_s3_client = None
+_client_lock = threading.Lock()
 
-def _get_client() -> Client:
-    global _client
-    if _client is None:
+
+def _get_client():
+    global _s3_client
+    if _s3_client is None:
         with _client_lock:
-            if _client is None:
-                _client = create_client(
-                    settings.supabase_url,
-                    settings.supabase_service_role_key,
+            if _s3_client is None:
+                _s3_client = boto3.client(
+                    "s3",
+                    endpoint_url=f"https://{settings.r2_account_id}.r2.cloudflarestorage.com",
+                    aws_access_key_id=settings.r2_access_key_id,
+                    aws_secret_access_key=settings.r2_secret_access_key,
+                    config=Config(signature_version="s3v4"),
+                    region_name="auto",
                 )
-    return _client
+    return _s3_client
 
 
 def detect_mime(content: bytes) -> str:
@@ -76,22 +81,28 @@ def generate_thumbnail(content: bytes, mime_type: str) -> Optional[bytes]:
 # ── Sync wrappers run in thread pool via asyncio.to_thread ────────────────────
 
 def _do_upload(path: str, content: bytes, mime_type: str) -> None:
-    _get_client().storage.from_(settings.supabase_storage_bucket).upload(
-        path, content, {"content-type": mime_type}
+    _get_client().put_object(
+        Bucket=settings.r2_bucket_name,
+        Key=path,
+        Body=content,
+        ContentType=mime_type,
     )
 
 
 def _do_delete(paths: list[str]) -> None:
-    _get_client().storage.from_(settings.supabase_storage_bucket).remove(paths)
+    objects = [{"Key": p} for p in paths]
+    _get_client().delete_objects(
+        Bucket=settings.r2_bucket_name,
+        Delete={"Objects": objects},
+    )
 
 
 def _do_signed_url(path: str, expires_in: int) -> str:
-    resp = _get_client().storage.from_(settings.supabase_storage_bucket).create_signed_url(
-        path, expires_in
+    return _get_client().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": settings.r2_bucket_name, "Key": path},
+        ExpiresIn=expires_in,
     )
-    if isinstance(resp, dict):
-        return resp.get("signedURL") or resp.get("signed_url") or ""
-    return getattr(resp, "signed_url", None) or getattr(resp, "signedURL", None) or ""
 
 
 # ── Async public API ──────────────────────────────────────────────────────────

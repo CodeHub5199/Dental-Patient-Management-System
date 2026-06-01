@@ -14,8 +14,8 @@ A cloud-based Dental Patient Management System for a single-dentist practice. Re
 | UI Kit | shadcn/ui (Radix Primitives) + Tailwind CSS v3 |
 | Backend | FastAPI (Python 3.11+) + Pydantic v2 |
 | ORM | SQLAlchemy 2.x async + asyncpg |
-| Database | Supabase PostgreSQL |
-| File Storage | Supabase Storage (S3-compatible) |
+| Database | Neon PostgreSQL |
+| File Storage | Cloudflare R2 (S3-compatible, via boto3) |
 | Auth | JWT (python-jose) + bcrypt (direct, not via passlib) |
 | Migrations | Alembic |
 | SMS | Twilio |
@@ -33,7 +33,7 @@ dental-pms/
 │   │   │                     #   clinical_notes, treatments, documents,
 │   │   │                     #   communications, dashboard, analytics, settings)
 │   │   ├── core/             # config.py, database.py, security.py, dependencies.py,
-│   │   │                     #   email.py (SendGrid helper), storage.py (Supabase Storage)
+│   │   │                     #   email.py (SendGrid helper), storage.py (Cloudflare R2)
 │   │   ├── models/           # SQLAlchemy models (user, patient, appointment,
 │   │   │                     #   clinical_note, treatment, document, communication,
 │   │   │                     #   password_reset, clinic_settings, procedure)
@@ -117,7 +117,7 @@ All tables defined in `backend/alembic/versions/001_initial_schema.py`:
 | `appointments` | Scheduling with 7-state FSM |
 | `clinical_notes` | SOAP notes (4 required fields) |
 | `treatments` | Procedure records with FDI tooth notation |
-| `documents` | File metadata (files in Supabase Storage) |
+| `documents` | File metadata (files in Cloudflare R2) |
 | `communications` | Outbound message log (SMS / email) |
 | `reminder_configs` | Configurable reminder templates |
 | `reminder_dispatch_log` | Idempotency table for reminder scheduler |
@@ -179,7 +179,7 @@ docker-compose up
 | 2 | Patient Management | 2026-05-29 | Backend was fully scaffolded from session 0; fixed reactivate_patient path param (UUID = None → UUID); built all shadcn/ui primitives; built SearchBar (debounced autocomplete), PatientFormDialog (react-hook-form + zod), DeactivatePatientDialog; full patients list page + patient profile page; 22 schema unit tests (34 total passing) |
 | 3 | Scheduling | 2026-05-29 | App-level conflict detection used instead of PostgreSQL exclusion constraint (simpler, safe for single-dentist MVP); added `AppointmentWithPatient` schema that joins patient name/phone via `selectinload`; slots endpoint now reads clinic_settings for working hours and slot duration; added `GET /users/dentists` endpoint (any-role) for receptionist booking flow; DayViewCalendar uses 1.5px/min absolute positioning (720px for 09:00–17:00); 38 new tests (72 total passing) |
 | 4 | Clinical Charting | 2026-05-29 | Backend was already fully implemented from scaffold (models, schemas, all CRUD routes); only frontend needed building; SOAP form uses live per-field character counters via `watch()`; patient profile tabs converted from static buttons to live Radix Tabs with lazy-loaded data per tab; 55 new tests (127 total passing) |
-| 5 | Document Storage | 2026-05-29 | Magic-byte MIME detection instead of python-magic (avoids Windows libmagic issues); Supabase Storage client uses sync `create_client` wrapped in `asyncio.to_thread()` (reliable, no async internals); parallel signed-URL generation via `asyncio.gather` for list endpoint; compensating storage delete when DB insert fails after file is already uploaded; 24 new tests (151 total passing) |
+| 5 | Document Storage | 2026-05-29 | Magic-byte MIME detection instead of python-magic (avoids Windows libmagic issues); Cloudflare R2 client uses sync boto3 wrapped in `asyncio.to_thread()` (reliable, no async internals); parallel signed-URL generation via `asyncio.gather` for list endpoint; compensating storage delete when DB insert fails after file is already uploaded; 24 new tests (151 total passing) |
 | 6 | Dashboard | 2026-05-29 | Backend was already scaffolded (CTE aggregation query, schema, route all present); DashboardClient converted from broken SSR-props pattern to self-contained client component that fetches via Axios (auth token in localStorage can't be read server-side); per-widget independent error states so a failed stats query doesn't block the appointment list; auto-refresh implemented as setInterval + fetchData() rather than router.refresh(); 9 new schema unit tests (160 total passing) |
 
 ## Known Issues / Tech Debt
@@ -191,7 +191,7 @@ docker-compose up
 - Document Storage: signed URL list endpoint generates one signed URL per document per request — parallelised with asyncio.gather but could be expensive for large libraries; consider lazy URL generation on click in future
 - Document Storage: document deletion is logged to Python logger only (no dedicated audit table); for medicolegal completeness an audit table should be added in Phase 2
 - Document Storage: no `python-magic` library used; inline magic-byte detection covers JPEG/PNG/PDF/DICOM only — an unrecognised file format (e.g. TIFF) is correctly rejected but error message says "DICOM" instead of identifying the actual format
-- Document Storage: Supabase Storage bucket and RLS must be manually configured in the Supabase dashboard before uploads will work (bucket: `patient-docs`, private, no public access)
+- Document Storage: Cloudflare R2 bucket must be manually created and set to private before uploads will work (bucket: `patient-docs`); configure `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` in `.env`
 - `next.config.mjs` rewrite proxies `/api/v1/*` to backend — requires `BACKEND_URL` env var in production
 - `quick_search` in patients.py: `current_user: CurrentUser` must stay as first parameter (Python non-default-before-default rule)
 - Patient profile "Communications" tab remains a stub — wired in future sprint
@@ -217,7 +217,7 @@ docker-compose up
 - **Relationship loading:** use `selectinload(Appointment.patient)` when loading appointments — never rely on lazy loading in async SQLAlchemy
 - **Static routes before path params:** in FastAPI, define `/appointments/calendar`, `/appointments/stats/daily`, `/appointments/slots/available`, and `/users/dentists` BEFORE `/{id}` routes to prevent shadowing
 - **Filter list pattern:** build ORM filters as a `list` and pass as `*filters` to both count and data queries — avoids cloning `select()` statements or using `.subquery()` with ORM loading options
-- **Storage client:** `app/core/storage.py` exposes `upload_file`, `delete_files`, `get_signed_url` as async functions wrapping the sync Supabase client via `asyncio.to_thread()`; import from `core.storage`, never instantiate the Supabase client directly in routes
+- **Storage client:** `app/core/storage.py` exposes `upload_file`, `delete_files`, `get_signed_url` as async functions wrapping the sync boto3 S3 client (pointed at Cloudflare R2) via `asyncio.to_thread()`; import from `core.storage`, never instantiate the boto3 client directly in routes
 - **Document response pattern:** always use `_build_response(doc)` from `documents.py` to attach `uploader_name` and signed URLs; requires `selectinload(Document.uploader)` on the query
 - **MIME detection:** use `detect_mime(content)` from `core/storage.py` — reads magic bytes, never trusts client-supplied Content-Type or file extension
 
